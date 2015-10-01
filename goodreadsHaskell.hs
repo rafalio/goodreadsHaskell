@@ -43,18 +43,25 @@ data Book = Book {
 instance XmlPickler Book where
   xpickle = xpBook
 
-devKey = "qgmEyVxWe68iCu4TMGbKIw" -- Get your own
-myId = "6752954" -- your goodreads ID
+data GRRequestConfig = GRRequestConfig {
+  grDevKey :: DevKey,
+  grUserId :: UserId
+}
+
+myConfig = GRRequestConfig {
+  grDevKey = "qgmEyVxWe68iCu4TMGbKIw", -- Get your own
+  grUserId = "6752954" -- your goodreads ID
+}
 
 main = do
-  reviews <- reviewsUpToPage 5
+  reviews <- reviewsUpToPage myConfig 5
   putStrLn $ "Number of reviews: " ++ show (length reviews)
   mapM_ (print . fmap (bTitle . rBook)) reviews
 
 -- A list of your book reviews up to the specified page (20 per page)
-reviewsUpToPage :: Page -> IO [Either String Review]
-reviewsUpToPage n = do
-  responses <- downloadPagesData myId 1 n
+reviewsUpToPage :: GRRequestConfig -> Page -> IO [Either String Review]
+reviewsUpToPage config n = do
+  responses <- downloadPagesData config 1 n
   let responseBodies = fmap (\r -> r ^. responseBody) responses
   return $ readXmlReviews $ concatMap parseGRResponse responseBodies
 
@@ -62,10 +69,11 @@ mkReadShelfURL :: UserId -> GoodreadsURL
 mkReadShelfURL uid = grBaseURL ++ uid
   where grBaseURL = "https://www.goodreads.com/review/list/"
 
-mkReadShelfRequestParams page = defaults & params .~ paramList
+mkReadShelfRequestParams :: DevKey -> Page -> Options
+mkReadShelfRequestParams key page = defaults & params .~ paramList
   where
     paramList = [("shelf","read"),
-                  ("key",devKey),
+                  ("key",T.pack key),
                   ("v","2"),
                   ("format","xml"),
                   ("per_page","20"),  -- 20 is the goodreads limit
@@ -94,13 +102,12 @@ readXmlReviews = fmap readXmlReview
 readXmlReview :: XmlTree -> Either String Review
 readXmlReview = (unpickleDoc' xpickle)
 
-downloadPagesData :: UserId -> Page -> Page -> IO [Response LB.ByteString]
-downloadPagesData uid from to = sequence actions
+downloadPagesData :: GRRequestConfig -> Page -> Page -> IO [Response LB.ByteString]
+downloadPagesData conf from to = sequence actions
   where
-    opts    = map mkReadShelfRequestParams [from..to]
-    url     = mkReadShelfURL uid
+    opts    = map (mkReadShelfRequestParams $ grDevKey conf) [from..to]
+    url     = mkReadShelfURL (grUserId conf)
     actions = zipWith getWith opts (repeat url)
-
 
 
 uncurry6 fx = \(a,b,c,d,e,f) -> fx a b c d e f
@@ -127,22 +134,3 @@ xpBook = xpElem "book" $
         (xpElem "image_url" $ xpText)
         (xpElem "link" $ xpText)
         (xpElem "num_pages" $ xpOption xpInt)
-
-{-
-
-XML data comes back like this:
-
-Xtag "GoodreadsResponse"
-  XTag "reviews"
-    XTag "review"
-      XTag "book"
-        XTag "title"
-        XTag "image_url"
-        XTag "link"
-        XTag "num_pages"
-      XTag "rating"
-      XTag "date_added"
-      XTag "read_at"
-      XTag "body" // the body of the text that I wrote
-      XTag "url"
--} 
