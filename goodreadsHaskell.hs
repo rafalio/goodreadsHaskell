@@ -48,16 +48,6 @@ data GRRequestConfig = GRRequestConfig {
   grUserId :: UserId
 }
 
-myConfig = GRRequestConfig {
-  grDevKey = "qgmEyVxWe68iCu4TMGbKIw", -- Get your own
-  grUserId = "6752954" -- your goodreads ID
-}
-
-main = do
-  reviews <- reviewsUpToPage myConfig 5
-  putStrLn $ "Number of reviews: " ++ show (length reviews)
-  mapM_ (print . fmap (bTitle . rBook)) reviews
-
 -- A list of your book reviews up to the specified page (20 per page)
 reviewsUpToPage :: GRRequestConfig -> Page -> IO [Either String Review]
 reviewsUpToPage config n = do
